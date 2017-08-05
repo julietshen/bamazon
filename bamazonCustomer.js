@@ -27,12 +27,12 @@ function bamazonSearch() {
 
   connection.query('SELECT * FROM products', function(error, results) {
       if (error) throw error;
-      for (var i = 0; i < results.length; i++) {
-        console.log("Item ID: " + results[i].item_id + "\nName: " + results[i].name + "\nPrice: " + results[i].price);
-        console.log("-------------------");
+      // for (var i = 0; i < results.length; i++) {
+      //   console.log("Item ID: " + results[i].item_id + "\nName: " + results[i].product_name + "\nPrice: " + results[i].price);
+      //   console.log("-------------------");
         placeOrder();
-      };
-  });
+      });
+  };
 
   function placeOrder() {
 
@@ -89,4 +89,3 @@ function bamazonSearch() {
       });
     });
   };
-};
