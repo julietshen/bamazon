@@ -1,109 +1,97 @@
-var express = require("express");
 var mysql = require("mysql");
 var inquirer = require("inquirer");
 
-var app = express();
-
-// Specify the port.
-var port = 3306;
-
 var connection = mysql.createConnection({
-  post: 3306,
   host: "localhost",
+  port: 3306,
   user: "root",
-  password: "",
+  password: null,
   database: "bamazon"
 });
 
 connection.connect(function(err) {
   if (err) {
-    throw err;
+    console.error("error connecting: " + err);
   }
-  console.log("connected at: " + connection.threadId);
-  bamazonSearch();
+  placeOrder();
 });
 
-function bamazonSearch() {
-  console.log("Selecting all products...\n");
-  connection.query('SELECT * FROM products', function(error, results) {
-      if (error) throw error;
-      for (var i = 0; i < results.length; i++) {
-        console.log("Item ID: " + results[i].item_id +
-          "\nName: " +
-          results[i].product_name +
-          "\nPrice: " +
-          results[i].price);
-        console.log("-------------------");
-        placeOrder();
-      };
-  });
-
-  placeOrder();
-
-  };
-})
-
 function placeOrder() {
+  connection.query("SELECT * FROM products", function(err, res) {
+    if (err) throw err;
+    console.table(res);
+    askCustomer(res);
+  });
+}
 
-  inquirer.prompt = ([{
-      type: "input",
-      name: "productID",
-      message: "What is the ID of the product you'd like to order?",
-      validate: function(value) {
-        if (isNaN(value) === false) {
-          return true;
+function askCustomer(inventory) {
+  inquirer
+    .prompt([
+      {
+        type: "input",
+        name: "choice",
+        message: "What is the ID of the item you would you like to purchase? [Quit with Q]",
+        validate: function(val) {
+          return !isNaN(val) || val.toLowerCase() === "q";
         }
-        return false;
       }
-    },
+    ])
+    .then(function(val) {
+      checkIfShouldExit(val.choice);
+      var choiceId = parseInt(val.choice);
+      var product = checkInventory(choiceId, inventory);
+
+      if (product) {
+        howMany(product);
+      }
+      else {
+        console.log("\nPlease enter a valid product.");
+        placeOrder();
+      }
+    });
+}
+
+function howMany(product) {
+  inquirer
+    .prompt([
       {
         type: "input",
         name: "quantity",
-        message: "How many units would you like to buy?",
-        validate: function(value) {
-          if (isNaN(value) === false) {
-            return true;
-          }
-          return false;
+        message: "How many of this itemwould you like?",
+        validate: function(val) {
+          return val > 0;
         }
       }
-    ]).then(function(answers) {
-      var choice;
-      let productID = answers.productID;
-      let quantity = answers.quantity;
-      connection.query('SELECT stock_quantity FROM products WHERE ?', {
-        item_id: productID
-      }, function(error, results) {
-        var stock = res[0].stock_quantity;
-        let newQuantity = stock - quantity;
-        let price = res[0].price;
+    ])
+    .then(function(val) {
+      var quantity = parseInt(val.quantity);
 
-        if (stock >= quantity) {
-          connection.query("UPDATE products SET ? WHERE ?", [{
-              stock_quantity: totalLeft
-            }, {
-              item_id: id
-            }],
-            function(err, res) {
-              var total = price * quantity;
-              console.log("Your total is $" + total);
-              inquirer.prompt([{
-                type: 'confirm',
-                message: 'Would you like to make another purchase?',
-                name: 'purchase'
-              }]).then(function(answer) {
-                if (answer.purchase === true) {
-                  placeOrder();
-                } else {
-                  return;
-                }
-              });
-            }
-          );
-        } else {
-          console.log("Sorry, we are currently out of stock.");
-          placeOrder();
-        }
-      });
+      if (quantity > product.stock_quantity) {
+        console.log("\nSorry, we don't have enough of this item in stock.");
+        placeOrder();
+      }
+      else {
+        makePurchase(product, quantity);
+      }
     });
-  };
+}
+
+function makePurchase(product, quantity) {
+  connection.query(
+    "UPDATE products SET stock_quantity = stock_quantity - ? WHERE item_id = ?",
+    [quantity, product.item_id],
+    function(err, res) {
+      console.log("\nSuccessfully purchased " + quantity + " " + product.product_name + "!");
+      placeOrder();
+    }
+  );
+}
+
+function checkInventory(choiceId, inventory) {
+  for (var i = 0; i < inventory.length; i++) {
+    if (inventory[i].item_id === choiceId) {
+      return inventory[i];
+    }
+  }
+  return null;
+}
